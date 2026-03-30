@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Salah Agent — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg:          #080c09;
+    --surface:     #0e1510;
+    --surface2:    #141f16;
+    --border:      #1c2b1f;
+    --gold:        #c9a84c;
+    --gold-dim:    #7a5f28;
+    --gold-glow:   rgba(201,168,76,0.1);
+    --green:       #2d7a50;
+    --green-light: #4db87a;
+    --text:        #e6e8d8;
+    --text-muted:  #7a8a75;
+    --danger:      #c0392b;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse 50% 30% at 50% 0%, rgba(201,168,76,0.06) 0%, transparent 60%);
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── Login Screen ── */
+  #login-screen {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+    background: var(--bg);
+    padding: 20px;
+  }
+
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 36px 32px;
+    width: 100%; max-width: 360px;
+    text-align: center;
+    box-shadow: 0 0 60px rgba(201,168,76,0.06);
+  }
+
+  .login-icon { font-size: 2.5rem; margin-bottom: 14px; }
+
+  .login-title {
+    font-family: 'Amiri', serif;
+    font-size: 1.5rem;
+    color: var(--gold);
+    margin-bottom: 4px;
+  }
+
+  .login-sub {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+  }
+
+  .login-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    outline: none;
+    margin-bottom: 14px;
+    text-align: center;
+    letter-spacing: 0.1em;
+    transition: border-color 0.2s;
+  }
+
+  .login-input:focus { border-color: var(--gold-dim); }
+
+  .btn-login {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--gold), #8a6020);
+    color: #080c09;
+    transition: all 0.2s;
+  }
+
+  .btn-login:hover { opacity: 0.9; transform: translateY(-1px); }
+
+  .login-error {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: #e74c3c;
+    min-height: 18px;
+  }
+
+  /* ── App ── */
+  #app {
+    display: none;
+    position: relative;
+    z-index: 1;
+  }
+
+  #app.show { display: block; }
+
+  /* ── Header ── */
+  .app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 50;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .header-logo {
+    font-family: 'Amiri', serif;
+    font-size: 1.2rem;
+    color: var(--gold);
+  }
+
+  .header-badge {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: rgba(201,168,76,0.12);
+    color: var(--gold);
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--gold-dim);
+  }
+
+  .btn-logout {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-logout:hover { border-color: var(--text-muted); color: var(--text); }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 16px 28px 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    overflow-x: auto;
+  }
+
+  .tab {
+    padding: 10px 18px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: 'Syne', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  /* ── Main ── */
+  .main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 28px 24px 60px;
+  }
+
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin-bottom: 16px;
+  }
+
+  .card-title {
+    font-family: 'Amiri', serif;
+    font-size: 1.1rem;
+    color: var(--gold);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ── Stats grid ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  @media (max-width: 700px) { .stats-grid { grid-template-columns: repeat(2,1fr); } }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 16px;
+  }
+
+  .stat-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--gold);
+    line-height: 1;
+  }
+
+  .stat-sub {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* ── Agent toggle bar ── */
+  .agent-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .status-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-dot.active { background: var(--green-light); box-shadow: 0 0 8px var(--green-light); }
+  .status-dot.idle   { background: var(--text-muted); }
+
+  .agent-status-text {
+    flex: 1;
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+
+  .toggle-switch { position: relative; width: 46px; height: 25px; flex-shrink: 0; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; inset: 0;
+    background: var(--border); border-radius: 25px; cursor: pointer; transition: 0.2s;
+  }
+  .toggle-slider::after {
+    content: ''; position: absolute;
+    width: 19px; height: 19px; border-radius: 50%;
+    background: white; top: 3px; left: 3px; transition: 0.2s;
+  }
+  input:checked + .toggle-slider { background: var(--green); }
+  input:checked + .toggle-slider::after { transform: translateX(21px); }
+
+  /* ── Prayer times grid ── */
+  .prayers-grid {
+    display: grid;
+    grid-template-columns: repeat(5,1fr);
+    gap: 10px;
+  }
+  @media (max-width: 600px) { .prayers-grid { grid-template-columns: repeat(3,1fr); } }
+
+  .prayer-card {
+    border-radius: 12px;
+    padding: 14px 10px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.05);
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .prayer-card.next-p { border-color: var(--gold) !important; box-shadow: 0 0 14px var(--gold-glow); }
+  .prayer-card.fajr    { background: #1a2744; }
+  .prayer-card.dhuhr   { background: #3d2a00; }
+  .prayer-card.asr     { background: #1a3320; }
+  .prayer-card.maghrib { background: #3d1a00; }
+  .prayer-card.isha    { background: #1a1a3d; }
+
+  .p-emoji  { font-size: 1.4rem; margin-bottom: 5px; }
+  .p-name   { font-family: 'Amiri', serif; font-size: 0.88rem; color: var(--text); margin-bottom: 3px; }
+  .p-time   { font-size: 1.05rem; font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; }
+  .p-tag    { font-size: 0.62rem; color: var(--text-muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .next-badge {
+    position: absolute; top: 5px; right: 5px;
+    background: var(--gold); color: #080c09;
+    font-size: 0.55rem; font-weight: 700;
+    padding: 2px 5px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    font-family: 'Syne', sans-serif;
+  }
+
+  /* ── Countdown ── */
+  .countdown-box {
+    text-align: center;
+    padding: 18px;
+    background: linear-gradient(135deg, rgba(201,168,76,0.05), rgba(45,122,80,0.04));
+    border: 1px solid var(--gold-dim);
+    border-radius: 14px;
+    margin-bottom: 16px;
+  }
+  .countdown-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; font-family: 'Syne', sans-serif; }
+  .countdown-prayer { font-family: 'Amiri', serif; font-size: 1.2rem; color: var(--gold); margin-bottom: 2px; }
+  .countdown-timer  { font-size: 2rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+
+  /* ── Contacts table ── */
+  .contact-table { width: 100%; border-collapse: collapse; }
+  .contact-table th {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .contact-table td {
+    padding: 12px 14px;
+    font-size: 0.85rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .contact-table tr:last-child td { border-bottom: none; }
+  .contact-table tr:hover td { background: rgba(255,255,255,0.015); }
+
+  .avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--green), var(--gold-dim));
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; font-weight: 700; color: white;
+    margin-right: 10px; flex-shrink: 0;
+  }
+
+  .contact-name-cell { display: flex; align-items: center; }
+
+  .prayer-dot {
+    display: inline-block;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--gold); margin: 0 2px;
+    opacity: 0.4;
+  }
+  .prayer-dot.on { opacity: 1; }
+
+  .tg-badge {
+    font-size: 0.72rem;
+    background: rgba(45,122,80,0.15);
+    border: 1px solid var(--green);
+    color: var(--green-light);
+    padding: 2px 7px; border-radius: 6px;
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    padding: 7px 14px;
+    border-radius: 7px; border: none;
+    cursor: pointer;
+    font-family: 'Syne', sans-serif;
+    font-size: 0.75rem; font-weight: 700;
+    transition: all 0.2s;
+  }
+  .btn-gold { background: linear-gradient(135deg, var(--gold), #8a6020); color: #080c09; }
+  .btn-gold:hover { opacity: 0.9; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+  .btn-outline:hover { border-color: var(--text-muted); color: var(--text); }
+  .btn-danger { background: rgba(192,57,43,0.12); border: 1px solid rgba(192,57,43,0.3); color: #e74c3c; }
+  .btn-danger:hover { background: rgba(192,57,43,0.2); }
+
+  /* ── Form ── */
+  .form-group { margin-bottom: 14px; }
+  .form-group label {
+    display: block;
+    font-family: 'Syne', sans-serif; font-size: 0.68rem; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 6px;
+  }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%;
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 13px;
+    border-radius: 9px; font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem; outline: none; transition: border-color 0.2s;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    border-color: var(--gold-dim);
+  }
+  select option { background: var(--surface); }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 560px) { .form-row { grid-template-columns: 1fr; } }
+
+  /* Offset slider */
+  .offset-row {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 16px; margin-top: 14px;
+  }
+  .offset-row label { font-size: 0.82rem; color: var(--text-muted); white-space: nowrap; }
+  .offset-row input[type=range] { flex: 1; background: transparent; border: none; padding: 0; accent-color: var(--gold); cursor: pointer; }
+  .offset-val {
+    background: var(--gold); color: #080c09;
+    font-size: 0.78rem; font-weight: 700; font-family: 'Syne', sans-serif;
+    padding: 3px 9px; border-radius: 6px; min-width: 56px; text-align: center;
+  }
+
+  /* ── Logs ── */
+  .log-entry {
+    padding: 8px 14px;
+    border-left: 2px solid var(--border);
+    margin-bottom: 5px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: var(--bg);
+    border-radius: 0 8px 8px 0;
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .log-entry.success { border-color: var(--green-light); color: #7ec89e; }
+  .log-entry.warning { border-color: var(--gold-dim); color: var(--gold); }
+  .log-entry.info    { border-color: #4a9eff; color: #7ab8ff; }
+  .log-time { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+  /* ── Config note ── */
+  .config-note {
+    font-size: 0.78rem; color: var(--text-muted);
+    padding: 10px 14px;
+    background: rgba(201,168,76,0.04);
+    border: 1px solid rgba(201,168,76,0.12);
+    border-radius: 8px; line-height: 1.6; margin-top: 12px;
+  }
+  .config-note a { color: var(--gold); text-decoration: none; }
+
+  /* Empty */
+  .empty-state { text-align: center; padding: 36px 20px; color: var(--text-muted); }
+  .empty-state .ei { font-size: 2.2rem; margin-bottom: 10px; }
+  .empty-state p { font-size: 0.85rem; line-height: 1.6; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 18px;
+    font-size: 0.84rem; color: var(--text);
+    z-index: 200; transform: translateY(60px); opacity: 0;
+    transition: all 0.3s; max-width: 300px;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-color: var(--green); }
+  .toast.warning { border-color: var(--gold-dim); }
+
+  /* Modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75); z-index: 100;
+    align-items: center; justify-content: center; padding: 20px;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 26px;
+    width: 100%; max-width: 440px;
+    animation: slideUp 0.25s ease;
+  }
+  @keyframes slideUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+  .modal-title { font-family: 'Amiri', serif; font-size: 1.15rem; color: var(--gold); margin-bottom: 18px; }
+  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+
+  /* Refresh badge */
+  #refresh-badge { font-size: 0.7rem; color: var(--text-muted); font-family: 'DM Sans', sans-serif; font-weight: 400; }
+</style>
+</head>
+<body>
+
+<!-- ── Login Screen ── -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-icon">🔐</div>
+    <div class="login-title">Admin Access</div>
+    <div class="login-sub">Salah Reminder Agent — Admin Panel</div>
+    <input type="password" class="login-input" id="pw-input" placeholder="Enter password"
+      onkeydown="if(event.key==='Enter') checkLogin()">
+    <button class="btn-login" onclick="checkLogin()">Login</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ── App ── -->
+<div id="app">
+
+  <div class="app-header">
+    <div class="header-left">
+      <span style="font-size:1.4rem">🕌</span>
+      <span class="header-logo">Salah Agent</span>
+      <span class="header-badge">Admin</span>
+    </div>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('dashboard',this)">📊 Dashboard</button>
+    <button class="tab" onclick="switchTab('prayers',this)">🕐 Prayer Times</button>
+    <button class="tab" onclick="switchTab('contacts',this)">👥 Contacts</button>
+    <button class="tab" onclick="switchTab('logs',this)">📋 Logs</button>
+    <button class="tab" onclick="switchTab('config',this)">⚙️ Config</button>
+  </div>
+
+  <div class="main">
+
+    <!-- ===== DASHBOARD ===== -->
+    <div class="section active" id="sec-dashboard">
+
+      <div class="countdown-box">
+        <div class="countdown-label">Next Prayer</div>
+        <div class="countdown-prayer" id="next-prayer-name">Loading...</div>
+        <div class="countdown-timer" id="next-countdown">--:--:--</div>
+      </div>
+
+      <div class="agent-bar">
+        <span class="status-dot idle" id="agent-dot"></span>
+        <span style="font-family:'Syne',sans-serif;font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);flex-shrink:0">Agent</span>
+        <span class="agent-status-text" id="agent-status-text">Inactive — enable to start scheduling calls</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="agent-toggle" onchange="toggleAgent(this)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">📞 Calls Today</div>
+          <div class="stat-value" id="stat-calls">0</div>
+          <div class="stat-sub" id="stat-calls-sub">No calls yet</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">👥 Contacts</div>
+          <div class="stat-value" id="stat-contacts">0</div>
+          <div class="stat-sub">Registered</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">📱 Telegram</div>
+          <div class="stat-value" id="stat-telegram">0</div>
+          <div class="stat-sub">Have Telegram</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">😔 Missed Today</div>
+          <div class="stat-value" id="stat-missed">0</div>
+          <div class="stat-sub">Salah missed</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="justify-content:space-between">
+          <span>🗓 Today's Prayer Schedule</span>
+          <span id="refresh-badge">🔁 Auto-refresh at midnight</span>
+        </div>
+        <div class="prayers-grid" id="dashboard-prayers"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📋 Recent Activity</div>
+        <div id="dashboard-logs">
+          <div class="empty-state"><div class="ei">🌙</div><p>No activity yet.</p></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===== PRAYER TIMES ===== -->
+    <div class="section" id="sec-prayers">
+      <div class="card">
+        <div class="card-title">🌍 Prayer Time Settings</div>
+
+        <div class="form-row" style="margin-bottom:14px">
+          <div class="form-group" style="margin-bottom:0">
+            <label>City</label>
+            <input type="text" id="city-input" placeholder="Kurnool, Hyderabad, Delhi...">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Calculation Method</label>
+            <select id="calc-method">
+              <option value="1">Karachi (HMF) — Recommended for India</option>
+              <option value="2">ISNA</option>
+              <option value="3">MWL</option>
+              <option value="4">Makkah</option>
+              <option value="5">Egypt</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+          <button class="btn btn-gold" onclick="fetchPrayerTimes()">🔄 Fetch Times</button>
+          <button class="btn btn-outline" onclick="detectLocation()">📍 Auto-Detect Location</button>
+        </div>
+
+        <div id="fetch-status" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;min-height:18px"></div>
+
+        <div class="prayers-grid" id="prayer-time-grid"></div>
+
+        <div style="margin-top:18px">
+          <div class="card-title" style="font-size:0.95rem;margin-bottom:12px">✏️ Manual Override</div>
+          <div class="prayers-grid" style="margin-bottom:14px">
+            <div class="form-group" style="margin-bottom:0">
+              <label>🌙 Fajr</label>
+              <input type="time" id="manual-fajr">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>☀️ Dhuhr</label>
+              <input type="time" id="manual-dhuhr">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>🌤 Asr</label>
+              <input type="time" id="manual-asr">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>🌇 Maghrib</label>
+              <input type="time" id="manual-maghrib">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>🌃 Isha</label>
+              <input type="time" id="manual-isha">
+            </div>
+          </div>
+        </div>
+
+        <div class="offset-row">
+          <label>⏰ Call</label>
+          <input type="range" id="offset-slider" min="5" max="60" value="15" step="5"
+            oninput="updateOffset(this.value)">
+          <span class="offset-val" id="offset-label">15 min Before</span>
+        </div>
+
+        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-gold" onclick="savePrayerSettings()">💾 Save Locally</button>
+          <button class="btn btn-gold" onclick="saveSettingsToSupabase()" style="background:linear-gradient(135deg,#2d7a50,#1a4d30)">☁️ Save to Supabase</button>
+        </div>
+        <div id="supabase-save-status" style="margin-top:8px;font-size:0.82rem;min-height:18px;color:var(--text-muted)"></div>
+      </div>
+    </div>
+
+    <!-- ===== CONTACTS ===== -->
+    <div class="section" id="sec-contacts">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div class="card-title" style="margin-bottom:0">👥 Registered Contacts</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-outline" onclick="loadContacts()">🔄 Refresh</button>
+            <button class="btn btn-gold" onclick="openAddContact()">+ Add</button>
+          </div>
+        </div>
+        <div id="contacts-table-wrap">
+          <div class="empty-state"><div class="ei">📱</div><p>Loading contacts...</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== LOGS ===== -->
+    <div class="section" id="sec-logs">
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div class="card-title" style="margin-bottom:0">📋 Activity Log</div>
+          <button class="btn btn-outline" onclick="clearLogs()">🗑 Clear</button>
+        </div>
+        <div id="log-container">
+          <div class="empty-state"><div class="ei">📋</div><p>No logs yet.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== CONFIG ===== -->
+    <div class="section" id="sec-config">
+
+      <div class="card">
+        <div class="card-title">🤖 Groq API Key</div>
+        <div class="form-group">
+          <label>Groq Key <span style="font-weight:400;text-transform:none;letter-spacing:0;font-family:'DM Sans',sans-serif">(for AI hadith reminders — free at console.groq.com)</span></label>
+          <input type="password" id="groq-key" placeholder="gsk_xxxxxxxxxxxxxxxxxxxxxxxx">
+        </div>
+        <button class="btn btn-gold" onclick="saveGroqKey()">💾 Save</button>
+        <div class="config-note">🆓 Groq is completely free. Without it, offline hadith bank is used.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📞 Twilio Credentials</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Account SID</label>
+            <input type="text" id="twilio-sid" placeholder="ACxxxxxxxxxxxxxxxx">
+          </div>
+          <div class="form-group">
+            <label>Auth Token</label>
+            <input type="password" id="twilio-token" placeholder="••••••••••••••••">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Twilio Phone Number (US)</label>
+          <input type="text" id="twilio-from" placeholder="+1XXXXXXXXXX">
+        </div>
+        <button class="btn btn-gold" onclick="saveConfig()">💾 Save Credentials</button>
+        <div class="config-note">
+          🛡 Stored in your browser only.<br>
+          📋 Setup: <a href="https://twilio.com" target="_blank">twilio.com</a> → buy US number → Console → Voice → Geo Permissions → enable <strong>India</strong>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🗣 Call Message</div>
+        <div class="form-group">
+          <label>Voice Message <span style="font-weight:400;text-transform:none;letter-spacing:0;font-family:'DM Sans',sans-serif">— use {prayer} and {minutes}</span></label>
+          <textarea id="call-message" rows="3" style="resize:vertical">Assalamu Alaikum. This is a reminder that {prayer} prayer time is in {minutes} minutes. Please prepare for salah. JazakAllah Khair.</textarea>
+        </div>
+        <div class="form-group">
+          <label>Voice Language</label>
+          <select id="voice-lang">
+            <option value="en-IN">English (India)</option>
+            <option value="en-US">English (US)</option>
+            <option value="hi-IN">Hindi</option>
+          </select>
+        </div>
+        <button class="btn btn-gold" onclick="saveCallSettings()">💾 Save</button>
+      </div>
+
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- Add Contact Modal -->
+<div class="modal-overlay" id="add-contact-modal">
+  <div class="modal">
+    <div class="modal-title">➕ Add Contact</div>
+    <div class="form-group">
+      <label>Name</label>
+      <input type="text" id="new-name" placeholder="Abdullah Khan">
+    </div>
+    <div class="form-group">
+      <label>Phone</label>
+      <input type="tel" id="new-phone" placeholder="+919876543210">
+    </div>
+    <div class="form-group">
+      <label>Telegram ID (optional)</label>
+      <input type="text" id="new-telegram" placeholder="@username">
+    </div>
+    <div class="form-group">
+      <label style="margin-bottom:8px;display:block">Prayers</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap" id="modal-pills">
+        <span class="pill active" data-prayer="Fajr" onclick="this.classList.toggle('active')">🌙 Fajr</span>
+        <span class="pill active" data-prayer="Dhuhr" onclick="this.classList.toggle('active')">☀️ Dhuhr</span>
+        <span class="pill active" data-prayer="Asr" onclick="this.classList.toggle('active')">🌤 Asr</span>
+        <span class="pill active" data-prayer="Maghrib" onclick="this.classList.toggle('active')">🌇 Maghrib</span>
+        <span class="pill active" data-prayer="Isha" onclick="this.classList.toggle('active')">🌃 Isha</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('add-contact-modal')">Cancel</button>
+      <button class="btn btn-gold" onclick="saveContact()">✅ Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+//  CONFIG — change password here
+// ══════════════════════════════════════════════
+const ADMIN_PASSWORD = 'salah1234'; // ← change this!
+
+const SUPABASE_URL  = 'https://srsywgzaavzesunhmyre.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNyc3l3Z3phYXZ6ZXN1bmhteXJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNDQzOTgsImV4cCI6MjA4ODkyMDM5OH0.qmMl__QS_Oet689xyLGDEQYsvn4T3v5J-Ct9AzGOQ4I';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ══════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════
+let state = {
+  contacts: [],
+  prayerTimes: JSON.parse(localStorage.getItem('salah_times') || 'null'),
+  offset: parseInt(localStorage.getItem('salah_offset') || '15'),
+  city: localStorage.getItem('salah_city') || 'Kurnool',
+  calcMethod: localStorage.getItem('salah_method') || '1',
+  agentActive: false,
+  manualOverride: false,
+  scheduledTimers: [],
+  callsMadeToday: 0,
+  missedToday: 0,
+  logs: JSON.parse(localStorage.getItem('salah_logs') || '[]'),
+  twilioSid:   localStorage.getItem('twilio_sid')   || '',
+  twilioToken: localStorage.getItem('twilio_token') || '',
+  twilioFrom:  localStorage.getItem('twilio_from')  || '',
+  callMessage: localStorage.getItem('salah_msg')    || 'Assalamu Alaikum. This is a reminder that {prayer} prayer time is in {minutes} minutes. Please prepare for salah. JazakAllah Khair.',
+  voiceLang:   localStorage.getItem('salah_lang')   || 'en-IN',
+  groqKey:     localStorage.getItem('groq_key')     || '',
+};
+
+const PRAYERS = [
+  { key:'Fajr',    emoji:'🌙' },
+  { key:'Dhuhr',   emoji:'☀️' },
+  { key:'Asr',     emoji:'🌤' },
+  { key:'Maghrib', emoji:'🌇' },
+  { key:'Isha',    emoji:'🌃' },
+];
+
+const DEFAULT_TIMES = { Fajr:'05:10', Dhuhr:'12:35', Asr:'15:55', Maghrib:'18:48', Isha:'20:10' };
+
+// ══════════════════════════════════════════════
+//  LOGIN
+// ══════════════════════════════════════════════
+function checkLogin() {
+  const pw = document.getElementById('pw-input').value;
+  if (pw === ADMIN_PASSWORD) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').classList.add('show');
+    initApp();
+  } else {
+    document.getElementById('login-error').textContent = '⚠️ Incorrect password';
+    document.getElementById('pw-input').value = '';
+  }
+}
+
+function logout() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('pw-input').value = '';
+}
+
+// ══════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════
+async function initApp() {
+  loadConfig();
+  if (!state.prayerTimes) state.prayerTimes = { ...DEFAULT_TIMES };
+  await loadContacts();
+  fetchPrayerTimes();
+  renderAll();
+  startCountdown();
+  scheduleMidnightRefresh();
+  addLog('info', '🔐 Admin logged in');
+}
+
+// ══════════════════════════════════════════════
+//  TABS
+// ══════════════════════════════════════════════
+function switchTab(id, el) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('sec-' + id).classList.add('active');
+  el.classList.add('active');
+}
+
+// ══════════════════════════════════════════════
+//  SUPABASE — CONTACTS
+// ══════════════════════════════════════════════
+async function loadContacts() {
+  try {
+    const { data, error } = await db.from('contacts').select('*').order('created_at');
+    if (error) throw error;
+    state.contacts = (data || []).map(c => ({
+      ...c,
+      prayers: Array.isArray(c.prayers) ? c.prayers : JSON.parse(c.prayers || '[]')
+    }));
+    renderContactsTable();
+    updateStats();
+    addLog('info', `👥 Loaded ${state.contacts.length} contacts`);
+  } catch(e) {
+    addLog('warning', `⚠️ Could not load contacts: ${e.message}`);
+  }
+}
+
+async function saveContact() {
+  const name     = document.getElementById('new-name').value.trim();
+  const phone    = document.getElementById('new-phone').value.trim();
+  const telegram = document.getElementById('new-telegram').value.trim();
+  if (!name || !phone) { showToast('⚠️ Name and phone required', 'warning'); return; }
+  const prayers  = [...document.querySelectorAll('#modal-pills .pill.active')].map(p => p.dataset.prayer);
+
+  try {
+    const { data, error } = await db.from('contacts').insert([{
+      name, phone, telegram_id: telegram || null, prayers
+    }]).select().single();
+    if (error) throw error;
+    state.contacts.push({ ...data, prayers });
+    closeModal('add-contact-modal');
+    renderContactsTable();
+    updateStats();
+    addLog('success', `✅ Contact added: ${name} (${phone})`);
+    showToast(`✅ ${name} added!`, 'success');
+  } catch(e) {
+    showToast(`⚠️ Failed: ${e.message}`, 'warning');
+  }
+}
+
+async function deleteContact(id, name) {
+  if (!confirm(`Remove ${name}?`)) return;
+  try {
+    await db.from('contacts').delete().eq('id', id);
+    state.contacts = state.contacts.filter(c => c.id !== id);
+    renderContactsTable();
+    updateStats();
+    addLog('info', `🗑 Contact removed: ${name}`);
+    showToast('🗑 Contact removed', '');
+  } catch(e) {
+    showToast(`⚠️ ${e.message}`, 'warning');
+  }
+}
+
+function renderContactsTable() {
+  const wrap = document.getElementById('contacts-table-wrap');
+  if (!state.contacts.length) {
+    wrap.innerHTML = `<div class="empty-state"><div class="ei">📱</div><p>No contacts yet.</p></div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <table class="contact-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Phone</th>
+          <th>Telegram</th>
+          <th>Prayers</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${state.contacts.map(c => {
+          const initials = c.name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
+          const prayerDots = PRAYERS.map(p =>
+            `<span class="prayer-dot ${c.prayers?.includes(p.key) ? 'on' : ''}" title="${p.key}">${p.emoji}</span>`
+          ).join('');
+          return `<tr>
+            <td><div class="contact-name-cell"><span class="avatar">${initials}</span>${c.name}</div></td>
+            <td style="font-variant-numeric:tabular-nums;color:var(--text-muted)">${c.phone}</td>
+            <td>${c.telegram_id ? `<span class="tg-badge">${c.telegram_id}</span>` : '<span style="color:var(--text-muted);font-size:0.75rem">—</span>'}</td>
+            <td>${prayerDots}</td>
+            <td>
+              <button class="btn btn-danger" onclick="deleteContact(${c.id},'${c.name}')">✕ Remove</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ══════════════════════════════════════════════
+//  PRAYER TIMES
+// ══════════════════════════════════════════════
+async function fetchPrayerTimes() {
+  if (state.manualOverride) {
+    addLog('info', '⏭️ Auto-fetch skipped — manual times active');
+    return;
+  }
+  const city   = document.getElementById('city-input')?.value || state.city;
+  const method = document.getElementById('calc-method')?.value || state.calcMethod;
+  const statusEl = document.getElementById('fetch-status');
+  if (statusEl) statusEl.textContent = '⏳ Fetching...';
+
+  try {
+    const today   = new Date();
+    const dateStr = `${String(today.getDate()).padStart(2,'0')}-${String(today.getMonth()+1).padStart(2,'0')}-${today.getFullYear()}`;
+    const url     = `https://api.aladhan.com/v1/timingsByCity/${dateStr}?city=${encodeURIComponent(city)}&country=IN&method=${method}`;
+    const res     = await fetch(url);
+    const json    = await res.json();
+
+    if (json.code === 200 && json.data?.timings) {
+      const t = json.data.timings;
+      state.prayerTimes = {
+        Fajr: t.Fajr.slice(0,5), Dhuhr: t.Dhuhr.slice(0,5),
+        Asr:  t.Asr.slice(0,5),  Maghrib: t.Maghrib.slice(0,5), Isha: t.Isha.slice(0,5),
+      };
+      state.city = city; state.calcMethod = method;
+      localStorage.setItem('salah_times',  JSON.stringify(state.prayerTimes));
+      localStorage.setItem('salah_city',   city);
+      localStorage.setItem('salah_method', method);
+      if (statusEl) statusEl.innerHTML = `✅ Loaded for <strong>${city}</strong> · ${json.data.date?.readable || ''}`;
+      renderAll();
+      fillManualInputs(state.prayerTimes);
+      addLog('info', `🕐 Prayer times fetched for ${city}`);
+    } else {
+      if (statusEl) statusEl.textContent = '⚠️ City not found. Try different spelling.';
+    }
+  } catch(e) {
+    if (statusEl) statusEl.textContent = '⚠️ Could not fetch. Check connection.';
+  }
+}
+
+function savePrayerSettings() {
+  state.offset = parseInt(document.getElementById('offset-slider').value);
+  localStorage.setItem('salah_offset', state.offset);
+  localStorage.setItem('salah_times',  JSON.stringify(state.prayerTimes));
+  renderAll();
+  showToast('✅ Prayer settings saved!', 'success');
+  if (state.agentActive) scheduleAll();
+}
+
+function updateOffset(val) {
+  state.offset = parseInt(val);
+  document.getElementById('offset-label').textContent = val + ' min before';
+}
+
+// ══════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════
+function renderAll() {
+  renderDashboardPrayers();
+  renderPrayerGrid();
+  renderLogs();
+  renderDashboardLogs();
+}
+
+function fillManualInputs(times) {
+  const map = { fajr:'manual-fajr', dhuhr:'manual-dhuhr', asr:'manual-asr', maghrib:'manual-maghrib', isha:'manual-isha' };
+  for (const [key, id] of Object.entries(map)) {
+    const el = document.getElementById(id);
+    const timeValue = times[key.charAt(0).toUpperCase() + key.slice(1)];
+    if (el && timeValue) {
+      el.value = timeValue;
+    }
+  }
+}
+
+function getNextPrayer() {
+  if (!state.prayerTimes) return null;
+  const nowMins = new Date().getHours() * 60 + new Date().getMinutes();
+  for (const p of PRAYERS) {
+    const t = state.prayerTimes[p.key];
+    if (!t) continue;
+    const [h,m] = t.split(':').map(Number);
+    if (h * 60 + m > nowMins) return { ...p, time: t };
+  }
+  return { ...PRAYERS[0], time: state.prayerTimes['Fajr'] };
+}
+
+function formatOffset(time) {
+  if (!time || time === '--:--') return '';
+  const [h,m] = time.split(':').map(Number);
+  const diff = (h*60+m) - (new Date().getHours()*60+new Date().getMinutes());
+  if (diff <= 0) return 'Passed';
+  if (diff < 60) return `in ${diff}m`;
+  return `in ${Math.floor(diff/60)}h ${diff%60}m`;
+}
+
+function renderDashboardPrayers() {
+  const grid = document.getElementById('dashboard-prayers');
+  if (!grid) return;
+  const next = getNextPrayer();
+  grid.innerHTML = PRAYERS.map(p => {
+    const t = state.prayerTimes?.[p.key] || '--:--';
+    const isNext = next && next.key === p.key;
+    return `<div class="prayer-card ${p.key.toLowerCase()} ${isNext ? 'next-p' : ''}">
+      ${isNext ? '<span class="next-badge">Next</span>' : ''}
+      <div class="p-emoji">${p.emoji}</div>
+      <div class="p-name">${p.key}</div>
+      <div class="p-time">${t}</div>
+      <div class="p-tag">${formatOffset(t)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderPrayerGrid() {
+  const grid = document.getElementById('prayer-time-grid');
+  if (!grid) return;
+  grid.innerHTML = PRAYERS.map(p => {
+    const t = state.prayerTimes?.[p.key] || '--:--';
+    return `<div class="prayer-card ${p.key.toLowerCase()}">
+      <div class="p-emoji">${p.emoji}</div>
+      <div class="p-name">${p.key}</div>
+      <div class="p-time">${t}</div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════
+//  STATS
+// ══════════════════════════════════════════════
+function updateStats() {
+  document.getElementById('stat-contacts').textContent  = state.contacts.length;
+  document.getElementById('stat-telegram').textContent  = state.contacts.filter(c => c.telegram_id).length;
+  document.getElementById('stat-calls').textContent     = state.callsMadeToday;
+  document.getElementById('stat-missed').textContent    = state.missedToday;
+}
+
+// ══════════════════════════════════════════════
+//  AGENT
+// ══════════════════════════════════════════════
+function toggleAgent(el) {
+  state.agentActive = el.checked;
+  const dot  = document.getElementById('agent-dot');
+  const text = document.getElementById('agent-status-text');
+  if (state.agentActive) {
+    if (!state.twilioSid || !state.twilioToken || !state.twilioFrom) {
+      el.checked = false; state.agentActive = false;
+      showToast('⚠️ Save Twilio credentials first (Config tab)', 'warning'); return;
+    }
+    dot.className = 'status-dot active';
+    text.textContent = `Active — calling ${state.offset} min before each prayer`;
+    scheduleAll();
+    addLog('success', '✅ Agent started');
+    showToast('✅ Agent active!', 'success');
+  } else {
+    dot.className = 'status-dot idle';
+    text.textContent = 'Inactive — enable to start scheduling calls';
+    clearAllTimers();
+    addLog('info', 'Agent stopped');
+  }
+}
+
+function scheduleAll() {
+  clearAllTimers();
+  if (!state.prayerTimes || !state.agentActive) return;
+  PRAYERS.forEach(p => {
+    const time = state.prayerTimes[p.key];
+    if (!time) return;
+    const [h,m] = time.split(':').map(Number);
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(h, m - state.offset, 0, 0);
+    if (target <= now) return;
+    const timer = setTimeout(() => triggerCalls(p), target - now);
+    state.scheduledTimers.push(timer);
+    addLog('info', `📅 ${p.key} call scheduled for ${formatTime12(h, m - state.offset)}`);
+  });
+}
+
+function clearAllTimers() {
+  state.scheduledTimers.forEach(t => clearTimeout(t));
+  state.scheduledTimers = [];
+}
+
+async function triggerCalls(prayer) {
+  const relevant = state.contacts.filter(c => c.prayers?.includes(prayer.key));
+  if (!relevant.length) return;
+  addLog('warning', `📞 Calling ${relevant.length} contacts for ${prayer.key}`);
+  for (const contact of relevant) {
+    await makeCall(contact.phone, prayer.key);
+    await delay(1500);
+  }
+  state.callsMadeToday += relevant.length;
+  updateStats();
+  renderDashboardLogs();
+}
+
+async function makeCall(phone, prayerName) {
+  const message = state.callMessage.replace('{prayer}', prayerName).replace('{minutes}', state.offset);
+  const voice   = { 'en-IN':'Raveena', 'en-US':'Joanna', 'hi-IN':'Aditi' }[state.voiceLang] || 'Joanna';
+  const twiml   = `<Response><Say voice="Polly.${voice}" language="${state.voiceLang}">${message}</Say><Pause length="1"/><Say voice="Polly.${voice}" language="${state.voiceLang}">${message}</Say></Response>`;
+  try {
+    const res  = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${state.twilioSid}/Calls.json`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Basic ' + btoa(state.twilioSid + ':' + state.twilioToken), 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ To: phone, From: state.twilioFrom, Twiml: twiml })
+    });
+    const data = await res.json();
+    if (data.sid) addLog('success', `📞 Called ${phone} — SID: ${data.sid.slice(0,12)}...`);
+    else addLog('warning', `⚠️ Call to ${phone} failed: ${data.message}`);
+  } catch(e) {
+    addLog('warning', `⚠️ Network error: ${e.message}`);
+  }
+}
+
+// ══════════════════════════════════════════════
+//  COUNTDOWN
+// ══════════════════════════════════════════════
+function startCountdown() {
+  updateCountdown();
+  setInterval(updateCountdown, 1000);
+}
+
+function updateCountdown() {
+  const next = getNextPrayer();
+  if (!next || !next.time) return;
+  const [h,m] = next.time.split(':').map(Number);
+  const now = new Date();
+  let target = new Date(now);
+  target.setHours(h, m, 0, 0);
+  if (target <= now) target.setDate(target.getDate() + 1);
+  const diff = Math.max(0, target - now);
+  const hh = String(Math.floor(diff/3600000)).padStart(2,'0');
+  const mm = String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
+  const ss = String(Math.floor((diff%60000)/1000)).padStart(2,'0');
+  const el   = document.getElementById('next-countdown');
+  const name = document.getElementById('next-prayer-name');
+  if (el)   el.textContent   = `${hh}:${mm}:${ss}`;
+  if (name) name.textContent = `${next.emoji} ${next.key} · ${next.time}`;
+}
+
+// ══════════════════════════════════════════════
+//  MIDNIGHT REFRESH
+// ══════════════════════════════════════════════
+function scheduleMidnightRefresh() {
+  const now = new Date();
+  const midnight = new Date(now);
+  midnight.setDate(midnight.getDate() + 1);
+  midnight.setHours(0, 1, 0, 0);
+  setTimeout(() => {
+    state.manualOverride = false;
+    fetchPrayerTimes();
+    addLog('info', '🔁 Midnight auto-refresh done');
+    setInterval(() => { fetchPrayerTimes(); addLog('info','🔁 Daily refresh'); }, 24*60*60*1000);
+  }, midnight - now);
+}
+
+// ══════════════════════════════════════════════
+//  AUTO-DETECT LOCATION
+// ══════════════════════════════════════════════
+async function detectLocation() {
+  if (!navigator.geolocation) { showToast('⚠️ Geolocation not supported', 'warning'); return; }
+  showToast('📍 Detecting location...', '');
+  navigator.geolocation.getCurrentPosition(async pos => {
+    try {
+      const { latitude: lat, longitude: lon } = pos.coords;
+      const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`, { headers: { 'Accept-Language':'en','User-Agent':'SalahAgent/1.0' } });
+      const data = await res.json();
+      const addr = data.address || {};
+      const city = addr.city || addr.town || addr.village || addr.state_district || addr.state || 'Unknown';
+      document.getElementById('city-input').value = city;
+      state.city = city;
+      localStorage.setItem('salah_city', city);
+      showToast(`📍 Detected: ${city}`, 'success');
+      fetchPrayerTimes();
+    } catch(e) { showToast('⚠️ Could not look up city', 'warning'); }
+  }, () => showToast('⚠️ Location permission denied', 'warning'), { timeout:10000 });
+}
+
+// ══════════════════════════════════════════════
+//  LOGS
+// ══════════════════════════════════════════════
+function addLog(type, msg) {
+  const now  = new Date();
+  const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  state.logs.unshift({ type, msg, time });
+  if (state.logs.length > 100) state.logs.pop();
+  localStorage.setItem('salah_logs', JSON.stringify(state.logs.slice(0,50)));
+  renderLogs();
+  renderDashboardLogs();
+}
+
+function renderLogs() {
+  const el = document.getElementById('log-container');
+  if (!el) return;
+  if (!state.logs.length) { el.innerHTML = `<div class="empty-state"><div class="ei">📋</div><p>No logs yet.</p></div>`; return; }
+  el.innerHTML = state.logs.map(l =>
+    `<div class="log-entry ${l.type}"><span class="log-time">${l.time}</span><span>${l.msg}</span></div>`
+  ).join('');
+}
+
+function renderDashboardLogs() {
+  const el = document.getElementById('dashboard-logs');
+  if (!el) return;
+  const recent = state.logs.slice(0,6);
+  if (!recent.length) { el.innerHTML = `<div class="empty-state"><div class="ei">🌙</div><p>No activity yet.</p></div>`; return; }
+  el.innerHTML = recent.map(l =>
+    `<div class="log-entry ${l.type}"><span class="log-time">${l.time}</span><span>${l.msg}</span></div>`
+  ).join('');
+}
+
+function clearLogs() {
+  state.logs = [];
+  localStorage.removeItem('salah_logs');
+  renderLogs(); renderDashboardLogs();
+  showToast('Logs cleared', '');
+}
+
+// ══════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════
+function loadConfig() {
+  document.getElementById('twilio-sid').value   = state.twilioSid;
+  document.getElementById('twilio-token').value = state.twilioToken;
+  document.getElementById('twilio-from').value  = state.twilioFrom;
+  document.getElementById('call-message').value = state.callMessage;
+  document.getElementById('voice-lang').value   = state.voiceLang;
+  document.getElementById('city-input').value   = state.city;
+  document.getElementById('calc-method').value  = state.calcMethod;
+  document.getElementById('offset-slider').value = state.offset;
+  document.getElementById('offset-label').textContent = state.offset + ' min before';
+  document.getElementById('groq-key').value     = state.groqKey;
+}
+
+function saveConfig() {
+  state.twilioSid   = document.getElementById('twilio-sid').value.trim();
+  state.twilioToken = document.getElementById('twilio-token').value.trim();
+  state.twilioFrom  = document.getElementById('twilio-from').value.trim();
+  localStorage.setItem('twilio_sid',   state.twilioSid);
+  localStorage.setItem('twilio_token', state.twilioToken);
+  localStorage.setItem('twilio_from',  state.twilioFrom);
+  showToast('✅ Twilio credentials saved!', 'success');
+}
+
+function saveCallSettings() {
+  state.callMessage = document.getElementById('call-message').value;
+  state.voiceLang   = document.getElementById('voice-lang').value;
+  localStorage.setItem('salah_msg',  state.callMessage);
+  localStorage.setItem('salah_lang', state.voiceLang);
+  showToast('✅ Call settings saved!', 'success');
+}
+
+async function saveSettingsToSupabase() {
+  const statusEl = document.getElementById('supabase-save-status');
+  if (statusEl) {
+    statusEl.textContent = '⏳ Saving...';
+    statusEl.style.color = 'var(--text-muted)';
+  }
+
+  const fajr    = document.getElementById('manual-fajr').value    || state.prayerTimes?.Fajr    || '';
+  const dhuhr   = document.getElementById('manual-dhuhr').value   || state.prayerTimes?.Dhuhr   || '';
+  const asr     = document.getElementById('manual-asr').value     || state.prayerTimes?.Asr     || '';
+  const maghrib = document.getElementById('manual-maghrib').value || state.prayerTimes?.Maghrib || '';
+  const isha    = document.getElementById('manual-isha').value    || state.prayerTimes?.Isha    || '';
+
+  if (fajr)    state.prayerTimes = { ...state.prayerTimes, Fajr: fajr };
+  if (dhuhr)   state.prayerTimes = { ...state.prayerTimes, Dhuhr: dhuhr };
+  if (asr)     state.prayerTimes = { ...state.prayerTimes, Asr: asr };
+  if (maghrib) state.prayerTimes = { ...state.prayerTimes, Maghrib: maghrib };
+  if (isha)    state.prayerTimes = { ...state.prayerTimes, Isha: isha };
+  localStorage.setItem('salah_times', JSON.stringify(state.prayerTimes));
+  state.manualOverride = true;
+
+  const payload = {
+    id:             1,
+    city:           state.city           || document.getElementById('city-input').value.trim(),
+    calc_method:    parseInt(state.calcMethod || document.getElementById('calc-method').value),
+    offset_minutes: state.offset,
+    fajr,
+    dhuhr,
+    asr,
+    maghrib,
+    isha,
+    updated_at:     new Date().toISOString()
+  };
+
+  try {
+    const { error } = await db.from('settings').upsert(payload, { onConflict: 'id' });
+    if (error) throw error;
+    if (statusEl) {
+      statusEl.textContent = '✅ Saved to Supabase!';
+      statusEl.style.color = 'var(--green-light)';
+    }
+    addLog('success', '☁️ Settings saved to Supabase');
+    showToast('✅ Settings saved to Supabase!', 'success');
+    renderAll();
+  } catch(e) {
+    if (statusEl) {
+      statusEl.textContent = `⚠️ Error: ${e.message}`;
+      statusEl.style.color = '#e74c3c';
+    }
+    addLog('warning', `⚠️ Supabase save failed: ${e.message}`);
+    showToast('⚠️ Save failed!', 'warning');
+  }
+}
+
+function saveGroqKey() {
+  state.groqKey = document.getElementById('groq-key').value.trim();
+  localStorage.setItem('groq_key', state.groqKey);
+  showToast('✅ Groq key saved!', 'success');
+}
+
+// ══════════════════════════════════════════════
+//  MODALS
+// ══════════════════════════════════════════════
+function openAddContact() {
+  document.getElementById('new-name').value = '';
+  document.getElementById('new-phone').value = '';
+  document.getElementById('new-telegram').value = '';
+  document.querySelectorAll('#modal-pills .pill').forEach(p => p.classList.add('active'));
+  document.getElementById('add-contact-modal').classList.add('open');
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ══════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function formatTime12(h, m) {
+  if (m < 0) { h -= 1; m += 60; }
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  return `${h%12||12}:${String(m).padStart(2,'0')} ${ampm}`;
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>

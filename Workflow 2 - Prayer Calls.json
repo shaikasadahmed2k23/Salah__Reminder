@@ -1,0 +1,325 @@
+{
+  "name": "Workflow 2 - Prayer Calls",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/1 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "62901ef7-f2f6-482d-be4b-969aa8675a43",
+      "name": "Check Every Minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "settings",
+        "returnAll": true
+      },
+      "id": "94bf6262-483d-49a2-ac3e-673413df1ecc",
+      "name": "Get Prayer Times from Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        224,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "BNjpasRERNMm9nQH",
+          "name": "Supabase account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const settings = $input.first().json;\n\n// Current time in IST (UTC+5:30)\nconst now = new Date();\nconst istOffset = 5.5 * 60 * 60 * 1000;\nconst ist = new Date(now.getTime() + istOffset);\nconst currentHour = ist.getUTCHours();\nconst currentMin  = ist.getUTCMinutes();\nconst currentTime = `${String(currentHour).padStart(2,'0')}:${String(currentMin).padStart(2,'0')}`;\n\n// Offset — how many minutes before prayer to call\nconst offset = settings.offset_minutes || 15;\n\n// Check each prayer\nconst prayers = [\n  { key: 'fajr',    name: 'Fajr',    time: settings.fajr },\n  { key: 'dhuhr',   name: 'Dhuhr',   time: settings.dhuhr },\n  { key: 'asr',     name: 'Asr',     time: settings.asr },\n  { key: 'maghrib', name: 'Maghrib', time: settings.maghrib },\n  { key: 'isha',    name: 'Isha',    time: settings.isha },\n];\n\nlet triggerPrayer = null;\n\nfor (const prayer of prayers) {\n  if (!prayer.time) continue;\n  const [pH, pM] = prayer.time.split(':').map(Number);\n  // Subtract offset minutes\n  let callH = pH;\n  let callM = pM - offset;\n  if (callM < 0) { callH -= 1; callM += 60; }\n  const callTime = `${String(callH).padStart(2,'0')}:${String(callM).padStart(2,'0')}`;\n  if (callTime === currentTime) {\n    triggerPrayer = prayer;\n    break;\n  }\n}\n\nif (!triggerPrayer) {\n  // No prayer to trigger right now — stop workflow\n  return [];\n}\n\nconsole.log(`🕌 Triggering calls for ${triggerPrayer.name} — call time: ${currentTime}`);\n\nreturn [{ json: { prayer: triggerPrayer, currentTime } }];"
+      },
+      "id": "c255f4ef-54a7-43ec-978f-924f76f4f536",
+      "name": "Check If Prayer Time Now",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "contacts",
+        "returnAll": true
+      },
+      "id": "c7a8bcff-9350-45d3-8f35-dd73356dd24a",
+      "name": "Get All Contacts",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "BNjpasRERNMm9nQH",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// const prayer = $('Check If Prayer Time Now').first().json.prayer;\n// const contacts = $input.all();\n\n// // Filter contacts who want this prayer reminder\n// const relevant = contacts.filter(item => {\n//   const c = item.json;\n//   const prayers = Array.isArray(c.prayers) ? c.prayers : JSON.parse(c.prayers || '[]');\n//   // Match case-insensitive\n//   return prayers.some(p => p.toLowerCase() === prayer.name.toLowerCase());\n// });\n\n// console.log(`📞 ${relevant.length} contacts to call for ${prayer.name}`);\n\n// if (!relevant.length) return [];\n\n// return relevant.map(item => ({\n//   json: {\n//     ...item.json,\n//     prayerName: prayer.name,\n//     prayerKey:  prayer.key\n//   }\n// }));\n\n\n\nconst contacts = $input.all();\n\nlet prayerName = 'Fajr';\nlet prayerKey  = 'fajr';\n\ntry {\n  const p = $('Check If Prayer Time Now').first().json.prayer;\n  if (p) { prayerName = p.name; prayerKey = p.key; }\n} catch(e) {\n  console.log('Testing mode — using Fajr');\n}\n\nconst relevant = contacts.filter(item => {\n  const c = item.json;\n  const prayers = Array.isArray(c.prayers) ? c.prayers : JSON.parse(c.prayers || '[]');\n  return prayers.some(p => p.toLowerCase() === prayerName.toLowerCase());\n});\n\nconsole.log(`📞 ${relevant.length} contacts to call for ${prayerName}`);\n\nif (!relevant.length) return [];\n\nreturn relevant.map(item => ({\n  json: {\n    ...item.json,\n    prayerName,\n    prayerKey\n  }\n}));"
+      },
+      "id": "7dd2f6d3-1b86-4c5e-b35a-049358fecbde",
+      "name": "Filter Relevant Contacts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const contact = $input.first().json;\nconst name       = contact.name       || 'Brother';\nconst prayerName = contact.prayerName || 'Fajr';\nconst offset     = 15;\n\n// Exotel needs 0XXXXXXXXXX format not +91\nconst phone = (contact.phone || '').replace('+91', '0');\n\nconst message = `Assalamu Alaikum ${name}. This is your Salah reminder. ${prayerName} prayer time is in ${offset} minutes. Please prepare for salah. JazakAllah Khair.`;\n\nreturn [{ json: { ...contact, message, name, prayerName, phone } }];"
+      },
+      "id": "50224d8d-3a62-44d1-a065-d74edc72938a",
+      "name": "Build Call Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "call_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "contact_id",
+              "fieldValue": "={{ $('Filter Relevant Contacts').item.json.id }}"
+            },
+            {
+              "fieldId": "prayer",
+              "fieldValue": "={{ $('Filter Relevant Contacts').item.json.prayerName }}"
+            },
+            {
+              "fieldId": "phone",
+              "fieldValue": "={{ $('Filter Relevant Contacts').item.json.phone }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "=called"
+            },
+            {
+              "fieldId": "twilio_sid",
+              "fieldValue": "={{ $json.sid ?? 'error' }}"
+            },
+            {
+              "fieldId": "timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "e6a7e4c4-954e-4571-8c81-eeaf11b073b2",
+      "name": "Log Call to Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1776,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "BNjpasRERNMm9nQH",
+          "name": "Supabase account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "content": "filter code chang!\n"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        912,
+        -256
+      ],
+      "typeVersion": 1,
+      "id": "97733a21-7902-40c5-b205-c57076169e5a",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "url": "=https://translate.google.com/translate_tts?ie=UTF-8&tl=en-IN&client=tw-ob&q={{ encodeURIComponent($json.message) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1328,
+        0
+      ],
+      "id": "faecd55f-efd3-4c94-9c82-536a8e6dd348",
+      "name": "Get Voice Audio"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8768053302:AAH0Y_7fPoNLR4YiLtRzZEtb3AG5a-iyOR4/sendVoice",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "=={{ $json.telegram_id }}"
+            },
+            {
+              "name": "voice",
+              "value": "data"
+            },
+            {
+              "name": "caption",
+              "value": "=={{ $json.message }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1536,
+        0
+      ],
+      "id": "c9fb61cc-0a87-4b85-8ebb-6f08b993f053",
+      "name": "Send Voice Note",
+      "disabled": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Check Every Minute": {
+      "main": [
+        [
+          {
+            "node": "Get Prayer Times from Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prayer Times from Supabase": {
+      "main": [
+        [
+          {
+            "node": "Check If Prayer Time Now",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Prayer Time Now": {
+      "main": [
+        [
+          {
+            "node": "Get All Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Contacts": {
+      "main": [
+        [
+          {
+            "node": "Filter Relevant Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Relevant Contacts": {
+      "main": [
+        [
+          {
+            "node": "Build Call Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Call Message": {
+      "main": [
+        [
+          {
+            "node": "Get Voice Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Voice Audio": {
+      "main": [
+        [
+          {
+            "node": "Send Voice Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Voice Note": {
+      "main": [
+        [
+          {
+            "node": "Log Call to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "95b606aa-16e7-48ca-b5c9-d6bfa940beb9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d8d3cceaac243b93f5363847df7576763ce1efd66426c1aa0c1e42e002bf945e"
+  },
+  "id": "LNRR5ArCZhP7e9f9",
+  "tags": []
+}

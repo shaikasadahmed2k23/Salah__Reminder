@@ -1,0 +1,276 @@
+{
+  "name": "Workflow 5 - Don't Call Me",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dont-call-me",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "93a69283-0e1b-4eed-a7cd-d8456a8142bb",
+      "name": "Delete Request Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1200,
+        144
+      ],
+      "webhookId": "131cd773-c511-4168-aad1-a8d315a8df3c"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\n\nconst phone = body.phone?.trim();\n\nif (!phone) {\n  return [{ json: { success: false, message: 'Phone number required' } }];\n}\n\nconsole.log(`🗑 Delete request for: ${phone}`);\n\nreturn [{ json: { phone, success: true } }];"
+      },
+      "id": "b2581844-bd8e-44ac-8866-1631436b26f0",
+      "name": "Parse Delete Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "contacts",
+        "returnAll": true,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $json.phone }}"
+            }
+          ]
+        }
+      },
+      "id": "a128e5f8-4cb5-4e02-8d91-f04ac7f57829",
+      "name": "Find Contact in Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -720,
+        144
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "BNjpasRERNMm9nQH",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const contacts = $input.all();\nconst phone    = $('Parse Delete Request').first().json.phone;\n\nif (!contacts.length || !contacts[0].json.id) {\n  return [{\n    json: {\n      found: false,\n      phone,\n      message: 'Number not found in our system'\n    }\n  }];\n}\n\nconst contact = contacts[0].json;\nconsole.log(`✅ Found contact: ${contact.name} (${contact.phone})`);\n\nreturn [{\n  json: {\n    found: true,\n    id:    contact.id,\n    name:  contact.name,\n    phone: contact.phone,\n    telegram_id: contact.telegram_id\n  }\n}];"
+      },
+      "id": "3a0440e7-64c7-4c20-adf9-3c06eed8622c",
+      "name": "Check If Found",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.found }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8ae64db1-131f-4cec-a93a-16f75a362d05",
+      "name": "Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "tableId": "contacts",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $json.phone }}"
+            }
+          ]
+        }
+      },
+      "id": "4eec6ddd-fc7c-4775-b937-6ae5b45ce00a",
+      "name": "Delete from Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "BNjpasRERNMm9nQH",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const contact = $('Check If Found').first().json;\n\n// Send goodbye Telegram message if they have telegram\nif (contact.telegram_id && contact.telegram_id.trim() !== '') {\n  try {\n    await fetch(\n      `https://api.telegram.org/bot8768053302:AAH0Y_7fPoNLR4YiLtRzZEtb3AG5a-iyOR4/sendMessage`,\n      {\n        method: 'POST',\n        headers: { 'Content-Type': 'application/json' },\n        body: JSON.stringify({\n          chat_id:    contact.telegram_id,\n          text:       `🔕 Assalamu Alaikum ${contact.name}!\\n\\nYou have been removed from Salah Reminder.\\n\\nMay Allah keep you steadfast in your prayers. 🤲\\n\\nYou can re-register anytime at our website.`,\n          parse_mode: 'Markdown'\n        })\n      }\n    );\n    console.log(`📱 Goodbye message sent to ${contact.telegram_id}`);\n  } catch(e) {\n    console.log('Could not send goodbye Telegram message:', e.message);\n  }\n}\n\nconsole.log(`🗑 Successfully deleted: ${contact.name} (${contact.phone})`);\n\nreturn [{\n  json: {\n    success: true,\n    message: `${contact.name} has been removed successfully`,\n    phone:   contact.phone\n  }\n}];"
+      },
+      "id": "0d08e799-d848-4026-aa4a-e9009edd6c93",
+      "name": "Send Goodbye & Confirm",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: $json.message }) }}",
+        "options": {}
+      },
+      "id": "08285462-8b62-4cb3-9fd0-b9f43d6caa94",
+      "name": "Response — Deleted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": false, \"message\": \"Number not found. Are you registered?\" }",
+        "options": {}
+      },
+      "id": "dda05cd6-ad17-439f-89ff-f064863e6bb0",
+      "name": "Response — Not Found",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        0,
+        288
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Delete Request Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Delete Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Delete Request": {
+      "main": [
+        [
+          {
+            "node": "Find Contact in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Contact in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Check If Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Found": {
+      "main": [
+        [
+          {
+            "node": "Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Found?": {
+      "main": [
+        [
+          {
+            "node": "Delete from Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Response — Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete from Supabase": {
+      "main": [
+        [
+          {
+            "node": "Send Goodbye & Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Goodbye & Confirm": {
+      "main": [
+        [
+          {
+            "node": "Response — Deleted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "057f913a-0420-4c9f-80ad-0ab6ae997e23",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d8d3cceaac243b93f5363847df7576763ce1efd66426c1aa0c1e42e002bf945e"
+  },
+  "id": "IEc5pGjXyfAHxyLw",
+  "tags": []
+}

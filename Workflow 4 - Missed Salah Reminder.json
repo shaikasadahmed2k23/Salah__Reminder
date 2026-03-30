@@ -1,0 +1,312 @@
+{
+  "name": "Workflow 4 - Missed Salah Reminder",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "9b908933-1968-4047-817f-a45a6f5d54dc",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "8d09da65-5b81-488c-b8a2-47c2ca0085aa",
+      "name": "Telegram Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        480
+      ],
+      "webhookId": "9b908933-1968-4047-817f-a45a6f5d54dc"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\n\n// Must be a callback_query (button press)\nif (!body.callback_query) {\n  console.log('Not a callback query — ignoring');\n  return [];\n}\n\nconst callbackData = body.callback_query.data;\nconst chatId       = body.callback_query.message.chat.id;\nconst messageId    = body.callback_query.message.message_id;\nconst firstName = body.callback_query.from.first_name || 'Brother/Sister';\n\nconsole.log(`📲 Callback received: ${callbackData} from ${chatId}`);\n\n// Format: yes_fajr_2 or no_fajr_2\nconst parts      = callbackData.split('_');\nconst answer     = parts[0]; // yes or no\nconst prayerKey  = parts[1]; // fajr, dhuhr etc\nconst contactId  = parts[2]; // contact id\n\nconst prayerNames = {\n  fajr: 'Fajr', dhuhr: 'Dhuhr', asr: 'Asr', maghrib: 'Maghrib', isha: 'Isha'\n};\nconst prayerEmojis = {\n  fajr: '🌙', dhuhr: '☀️', asr: '🌤', maghrib: '🌇', isha: '🌃'\n};\n\nreturn [{\n  json: {\n    answer,\n    prayerKey,\n    prayerName:  prayerNames[prayerKey]  || prayerKey,\n    prayerEmoji: prayerEmojis[prayerKey] || '🕌',\n    contactId,\n    chatId,\n    messageId,\n    firstName\n  }\n}];"
+      },
+      "id": "7d40200f-888c-412a-a925-c681cce0a5a6",
+      "name": "Parse Button Press",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.answer }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "acbea2f3-902d-4e62-989b-975533db8229"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "59f258be-7fd6-49f6-bd09-ff00e70e0e09",
+      "name": "Yes or No?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        128,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot8768053302:AAH0Y_7fPoNLR4YiLtRzZEtb3AG5a-iyOR4/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": {{ $json.chatId }},\n  \"text\": {{ JSON.stringify(\"✅ Alhamdulillah! 🤲\\n\\nMay Allah accept your \" + $json.prayerName + \" prayer and reward you abundantly.\\n\\nحَافِظُوا عَلَى الصَّلَوَاتِ\\nMaintain the prayers — Quran 2:238\") }},\n  \"parse_mode\": \"Markdown\"\n}",
+        "options": {}
+      },
+      "id": "bee0559d-9ddd-4cff-8f2d-cb9f65453010",
+      "name": "Send Alhamdulillah Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1024,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_GROQ_API_KEY_HERE"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"max_tokens\": 800,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"A Muslim named {{ $json.firstName }} has just missed their {{ $json.prayerName }} prayer. Give ONE deeply heart-touching reminder. Include Arabic verse/hadith with source, English translation, and 2-3 sentences of reflection. Respond ONLY in this JSON format: {\\\"arabic\\\": \\\"text\\\", \\\"source\\\": \\\"source\\\", \\\"translation\\\": \\\"translation\\\", \\\"reflection\\\": \\\"reflection\\\"}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "ccc1e192-eb02-4d0f-983c-be22b43be522",
+      "name": "Fetch Hadith from Groq",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        352,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const groqResponse = $input.first().json;\nconst prevData = $('Parse Button Press').first().json;\n\nlet reminder;\ntry {\n  const raw   = groqResponse.choices[0].message.content;\n  const clean = raw.replace(/```json|```/g, '').trim();\n  reminder    = JSON.parse(clean);\n} catch(e) {\n  // Offline fallback\n  reminder = {\n    arabic:     'فَوَيْلٌ لِّلْمُصَلِّينَ الَّذِينَ هُمْ عَن صَلَاتِهِمْ سَاهُونَ',\n    source:     'Quran — Surah Al-Maun (107:4-5)',\n    translation:'So woe to those who pray but are heedless of their prayer.',\n    reflection: 'Allah is not only watching whether you pray — He watches whether you even care. Every missed salah is a call from Allah that we did not answer. The companions would tremble at the thought of missing even one prayer — may Allah make us from those who guard their salah.'\n  };\n}\n\nconst message = `😔 *${prevData.prayerEmoji} ${prevData.prayerName} — Missed Salah Reminder*\\n\\n` +\n  `_${prevData.firstName}, Allah was calling you..._\\n\\n` +\n  `*${reminder.arabic}*\\n\\n` +\n  `📖 *${reminder.source}*\\n` +\n  `_\"${reminder.translation}\"_\\n\\n` +\n  `${reminder.reflection}\\n\\n` +\n  `🤲 _May Allah forgive us and make the next salah easy for us._`;\n\nreturn [{\n  json: {\n    ...prevData,\n    reminderMessage: message,\n    reminder\n  }\n}];"
+      },
+      "id": "d1777d9a-c645-44e7-af01-0f08149df459",
+      "name": "Build Reminder Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot8768053302:AAH0Y_7fPoNLR4YiLtRzZEtb3AG5a-iyOR4/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": {{ $json.chatId }},\n  \"text\": {{ JSON.stringify($json.reminderMessage) }},\n  \"parse_mode\": \"Markdown\"\n}",
+        "options": {}
+      },
+      "id": "7b304eb4-31a8-483e-bd4c-e97b7b05a3c8",
+      "name": "Send Reminder to Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "missed_prayers",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "contact_id",
+              "fieldValue": "={{ $('Parse Button Press').item.json.contactId }}"
+            },
+            {
+              "fieldId": "prayer",
+              "fieldValue": "={{ $('Parse Button Press').item.json.prayerName }}"
+            },
+            {
+              "fieldId": "chat_id",
+              "fieldValue": "={{ $('Parse Button Press').item.json.chatId }}"
+            },
+            {
+              "fieldId": "reminder_num",
+              "fieldValue": "=1"
+            },
+            {
+              "fieldId": "timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "df91dc31-988c-457b-b1f8-fc84acb0eade",
+      "name": "Log Missed Prayer",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        576
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "BNjpasRERNMm9nQH",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok' }) }}",
+        "options": {}
+      },
+      "id": "ecfd6ef6-f7f4-4ae8-afcd-e939ee274d53",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        480
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Button Press",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Button Press": {
+      "main": [
+        [
+          {
+            "node": "Yes or No?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Yes or No?": {
+      "main": [
+        [
+          {
+            "node": "Send Alhamdulillah Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Hadith from Groq",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Alhamdulillah Message": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Hadith from Groq": {
+      "main": [
+        [
+          {
+            "node": "Build Reminder Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Reminder Message": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reminder to Telegram": {
+      "main": [
+        [
+          {
+            "node": "Log Missed Prayer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Missed Prayer": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "5c1b7d64-d48d-46dd-8341-64e585c3516d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d8d3cceaac243b93f5363847df7576763ce1efd66426c1aa0c1e42e002bf945e"
+  },
+  "id": "epxmUisopET9cEna",
+  "tags": []
+}

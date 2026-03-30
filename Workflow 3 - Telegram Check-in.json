@@ -1,0 +1,247 @@
+{
+  "name": "Workflow 3 - Telegram Check-in",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/1 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "20028d81-5a90-49af-80c3-2cdab8b98923",
+      "name": "Check Every Minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "settings",
+        "returnAll": true
+      },
+      "id": "896fd6c0-c099-4752-9d75-4fbf57fc501e",
+      "name": "Get Prayer Times",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        224,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "BNjpasRERNMm9nQH",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const settings = $input.first().json;\n\n// Current time IST (UTC+5:30)\nconst now = new Date();\nconst ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));\nconst currentHour = ist.getUTCHours();\nconst currentMin  = ist.getUTCMinutes();\nconst currentTime = `${String(currentHour).padStart(2,'0')}:${String(currentMin).padStart(2,'0')}`;\n\n// 20 minutes AFTER prayer time — ask did you pray?\nconst checkinOffset = 20;\n\nconst prayers = [\n  { key: 'fajr',    name: 'Fajr',    emoji: '🌙', time: settings.fajr },\n  { key: 'dhuhr',   name: 'Dhuhr',   emoji: '☀️', time: settings.dhuhr },\n  { key: 'asr',     name: 'Asr',     emoji: '🌤', time: settings.asr },\n  { key: 'maghrib', name: 'Maghrib', emoji: '🌇', time: settings.maghrib },\n  { key: 'isha',    name: 'Isha',    emoji: '🌃', time: settings.isha },\n];\n\nlet triggerPrayer = null;\n\nfor (const prayer of prayers) {\n  if (!prayer.time) continue;\n  const [pH, pM] = prayer.time.split(':').map(Number);\n  let checkH = pH;\n  let checkM = pM + checkinOffset;\n  if (checkM >= 60) { checkH += 1; checkM -= 60; }\n  const checkTime = `${String(checkH).padStart(2,'0')}:${String(checkM).padStart(2,'0')}`;\n  if (checkTime === currentTime) {\n    triggerPrayer = prayer;\n    break;\n  }\n}\n\nif (!triggerPrayer) return [];\n\nconsole.log(`📋 Check-in time for ${triggerPrayer.name}`);\nreturn [{ json: { prayer: triggerPrayer, currentTime } }];"
+      },
+      "id": "c2ce484c-2ffa-4c36-9fc9-ec7a6442791b",
+      "name": "Check If Checkin Time",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "contacts",
+        "returnAll": true
+      },
+      "id": "915ac048-83e8-4922-b184-0c3f4018857e",
+      "name": "Get Contacts with Telegram",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "BNjpasRERNMm9nQH",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prayer = $('Check If Checkin Time').first().json.prayer;\nconst contacts = $input.all();\n\n// Only contacts who have telegram AND subscribed to this prayer\nconst relevant = contacts.filter(item => {\n  const c = item.json;\n  if (!c.telegram_id || c.telegram_id.trim() === '') return false;\n  const prayers = Array.isArray(c.prayers) ? c.prayers : JSON.parse(c.prayers || '[]');\n  return prayers.some(p => p.toLowerCase() === prayer.name.toLowerCase());\n});\n\nconsole.log(`💌 Sending check-in to ${relevant.length} contacts for ${prayer.name}`);\n\nif (!relevant.length) return [];\n\nreturn relevant.map(item => ({\n  json: {\n    ...item.json,\n    prayerName: prayer.name,\n    prayerEmoji: prayer.emoji,\n    prayerKey: prayer.key\n  }\n}));\n\n// const contacts = $input.all();\n\n// // Testing mode — hardcode prayer\n// let prayerName  = 'Fajr';\n// let prayerEmoji = '🌙';\n// let prayerKey   = 'fajr';\n\n// try {\n//   const p = $('Check If Checkin Time').first().json.prayer;\n//   if (p) { prayerName = p.name; prayerEmoji = p.emoji; prayerKey = p.key; }\n// } catch(e) {\n//   console.log('Testing mode — using Fajr');\n// }\n\n// const relevant = contacts.filter(item => {\n//   const c = item.json;\n//   if (!c.telegram_id || c.telegram_id.trim() === '') return false;\n//   const prayers = Array.isArray(c.prayers) ? c.prayers : JSON.parse(c.prayers || '[]');\n//   return prayers.some(p => p.toLowerCase() === prayerName.toLowerCase());\n// });\n\n// console.log(`💌 Sending check-in to ${relevant.length} contacts for ${prayerName}`);\n\n// if (!relevant.length) return [];\n\n// return relevant.map(item => ({\n//   json: {\n//     ...item.json,\n//     prayerName,\n//     prayerEmoji,\n//     prayerKey\n//   }\n// }));"
+      },
+      "id": "03ba5abd-1b1c-433b-8729-f9c2aeb3fcd6",
+      "name": "Filter Telegram Contacts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// const contact = $input.first().json;\n\n// // Build inline keyboard message\n// const text = `${contact.prayerEmoji} *${contact.prayerName} Prayer*\\n\\nAssalamu Alaikum ${contact.name}! 🤲\\n\\nDid you offer your *${contact.prayerName}* prayer?`;\n\n// const inlineKeyboard = {\n//   inline_keyboard: [\n//     [\n//       { text: '✅ Alhamdulillah, Yes', callback_data: `yes_${contact.prayerKey}_${contact.id}` },\n//       { text: '😔 No, I missed it',   callback_data: `no_${contact.prayerKey}_${contact.id}` }\n//     ]\n//   ]\n// };\n\n// return [{\n//   json: {\n//     ...contact,\n//     telegramText: text,\n//     replyMarkup: JSON.stringify(inlineKeyboard)\n//   }\n// }];\nconst contact = $input.first().json;\n\nconst text = `${contact.prayerEmoji} *${contact.prayerName} Prayer*\\n\\nAssalamu Alaikum ${contact.name}! 🤲\\n\\nDid you offer your *${contact.prayerName}* prayer?`;\n\nconst inlineKeyboard = {\n  inline_keyboard: [\n    [\n      { text: '✅ Alhamdulillah, Yes', callback_data: `yes_${contact.prayerKey}_${contact.id}` },\n      { text: '😔 No, I missed it',   callback_data: `no_${contact.prayerKey}_${contact.id}` }\n    ]\n  ]\n};\n\nreturn [{\n  json: {\n    ...contact,\n    chat_id: contact.telegram_id,\n    text: text,\n    parse_mode: \"Markdown\",\n    reply_markup: inlineKeyboard\n  }\n}];"
+      },
+      "id": "2e3872f4-9c26-4014-9431-89a27d33e2f7",
+      "name": "Build Telegram Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot8768053302:AAH0Y_7fPoNLR4YiLtRzZEtb3AG5a-iyOR4/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $json.chat_id }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.text }}"
+            },
+            {
+              "name": "parse_mode",
+              "value": "Markdown"
+            },
+            {
+              "name": "reply_markup",
+              "value": "={{ $json.reply_markup }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "83321106-a240-4026-af87-b18a094b4733",
+      "name": "Send Telegram Check-in",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const contact = $('Filter Telegram Contacts').item.json;\nconsole.log(`✅ Check-in sent to ${contact.name} (${contact.telegram_id}) for ${contact.prayerName}`);\nreturn $input.all();"
+      },
+      "id": "73fd8da5-5b63-48b9-b5bd-42177af461c7",
+      "name": "Log Check-in Sent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Check Every Minute": {
+      "main": [
+        [
+          {
+            "node": "Get Prayer Times",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prayer Times": {
+      "main": [
+        [
+          {
+            "node": "Check If Checkin Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Checkin Time": {
+      "main": [
+        [
+          {
+            "node": "Get Contacts with Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Contacts with Telegram": {
+      "main": [
+        [
+          {
+            "node": "Filter Telegram Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Telegram Contacts": {
+      "main": [
+        [
+          {
+            "node": "Build Telegram Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Telegram Message": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Check-in",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram Check-in": {
+      "main": [
+        [
+          {
+            "node": "Log Check-in Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "b8695368-5d9e-4ba3-ac00-6758898dc234",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d8d3cceaac243b93f5363847df7576763ce1efd66426c1aa0c1e42e002bf945e"
+  },
+  "id": "cWSzkX3W5V2gqSq3",
+  "tags": []
+}
