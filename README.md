@@ -1,6 +1,8 @@
-# 🕌 Salah Reminder — Never Miss a Prayer
+# 🕌 Salah Reminder — Never Miss a Prayer 
 
 A comprehensive automated prayer reminder system that helps Muslims never miss their daily Salah (Islamic prayers). The system combines real-time prayer time tracking, automated Telegram notifications, and user engagement features to ensure prayers are performed on time.
+
+[![Open Salah Reminder](https://img.shields.io/badge/🔔%20Open-Salah%20Reminder-green?style=for-the-badge)](https://thunderous-bonbon-6c7fb5.netlify.app/)
 
 ## ✨ Features
 
